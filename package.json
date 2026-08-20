@@ -1,0 +1,20 @@
+{
+  "name": "slynky-intmarket",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "bot": "node bot.js",
+    "dev": "nodemon index.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "cors": "^2.8.6",
+    "discord.js": "^14.27.0",
+    "express": "^5.2.1",
+    "sql.js": "^1.14.2"
+  }
+}

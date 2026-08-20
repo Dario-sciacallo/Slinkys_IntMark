@@ -1,0 +1,174 @@
+const initSqlJs = require('sql.js');
+const fs = require('fs');
+const path = require('path');
+
+const DB_PATH = path.join(__dirname, 'slynky-intmarket.db');
+
+let db;
+
+async function initDB() {
+  const SQL = await initSqlJs();
+
+  if (fs.existsSync(DB_PATH)) {
+    const buffer = fs.readFileSync(DB_PATH);
+    db = new SQL.Database(buffer);
+  } else {
+    db = new SQL.Database();
+  }
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS [user] (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      discord_id TEXT NOT NULL UNIQUE,
+      torn_id TEXT NOT NULL UNIQUE,
+      torn_name TEXT NOT NULL UNIQUE,
+      api_key_encrypted TEXT NOT NULL,
+      api_key_status DATETIME DEFAULT CURRENT_TIMESTAMP,
+      last_inventory_sync TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      flag_delete TEXT DEFAULT 'N'
+    )
+  `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS item (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      torn_itemid INTEGER NOT NULL,
+      item_name TEXT, 
+      item_isconsumable TEXT DEFAULT 'N',
+      item_isactive TEXT DEFAULT 'N',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      flag_delete TEXT DEFAULT 'N'
+    )
+  `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS inventory_snapshot (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      item_id INTEGER NOT NULL,
+      quantity INTEGER NOT NULL,		 
+      refresh DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES [user](id),
+      FOREIGN KEY (item_id) REFERENCES item(id)
+    )
+  `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS listing (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      seller_id INTEGER NOT NULL,
+      item_id INTEGER NOT NULL,
+      unit_price REAL NOT NULL,
+      unit_quantity REAL NOT NULL,
+      reserved_quantity REAL DEFAULT 0,
+      available_quantity REAL DEFAULT 0,
+      sold_quantity REAL DEFAULT 0,
+      listing_status TEXT DEFAULT 'ACTIVE',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME,
+      expires_at DATETIME,
+      flag_delete TEXT DEFAULT 'N',
+      FOREIGN KEY (seller_id) REFERENCES [user](id),
+      FOREIGN KEY (item_id) REFERENCES item(id)
+    )
+  `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS [order] (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      buyer_id INTEGER NOT NULL,
+      item_id INTEGER NOT NULL,
+      item_qty REAL NOT NULL,
+      item_price REAL NOT NULL,
+      total_amount REAL NOT NULL, 
+      order_status TEXT DEFAULT 'pending',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME,
+      expires_at DATETIME,
+      flag_delete TEXT DEFAULT 'N',
+      FOREIGN KEY (buyer_id) REFERENCES [user](id),
+      FOREIGN KEY (item_id) REFERENCES item(id)
+    )
+  `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS inventory_reservation (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      seller_id INTEGER NOT NULL,
+      item_id INTEGER NOT NULL,
+      listing_id INTEGER NOT NULL,
+      item_qty REAL NOT NULL,
+      listing_status TEXT DEFAULT 'ACTIVE',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME,
+      expires_at DATETIME,
+      flag_delete TEXT DEFAULT 'N',
+      FOREIGN KEY (seller_id) REFERENCES [user](id),
+      FOREIGN KEY (item_id) REFERENCES item(id),
+      FOREIGN KEY (listing_id) REFERENCES listing(id)		
+    )
+  `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS TRADE (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      listing_id INTEGER NOT NULL,
+      buyer_id INTEGER NOT NULL,
+      seller_id INTEGER NOT NULL,
+      item_id INTEGER NOT NULL,
+      quantity INTEGER NOT NULL,
+      unit_price INTEGER NOT NULL,
+      total_price INTEGER NOT NULL,
+      status TEXT DEFAULT 'TRADE_CREATED',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      completed_at DATETIME,
+      FOREIGN KEY (listing_id) REFERENCES listing(id),
+      FOREIGN KEY (buyer_id) REFERENCES [user](id),
+      FOREIGN KEY (item_id) REFERENCES item(id)
+    )
+  `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS TRADE_EVENT (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      trade_id INTEGER NOT NULL,
+      event_type TEXT NOT NULL,
+      actor_id TEXT NOT NULL,
+      metadata TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (trade_id) REFERENCES TRADE(id),
+      FOREIGN KEY (actor_id) REFERENCES [user](id)
+    )
+  `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS order_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      order_id INTEGER NOT NULL,
+      item_id INTEGER NOT NULL,
+      quantity INTEGER NOT NULL,
+      price REAL NOT NULL,
+      FOREIGN KEY (order_id) REFERENCES [order](id),
+      FOREIGN KEY (item_id) REFERENCES item(id)
+    )
+  `);
+
+  saveDB();
+  console.log('Database initialized successfully');
+  return db;
+}
+
+function saveDB() {
+  const data = db.export();
+  const buffer = Buffer.from(data);
+  fs.writeFileSync(DB_PATH, buffer);
+}
+
+function getDB() {
+  return db;
+}
+
+module.exports = { initDB, getDB, saveDB };
